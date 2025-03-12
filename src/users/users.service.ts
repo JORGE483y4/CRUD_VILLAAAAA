@@ -1,77 +1,130 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { Invitados, Users } from '@prisma/client'
+import { PrismaService } from 'src/prisma/prisma.service'
 
 @Injectable()
-export class UserService {
-  constructor(private prisma: PrismaService) {}
+export class UsersService {
+    constructor(private prisma: PrismaService) { }
 
-  async getUsers() {
-    return await this.prisma.user.findMany({
-      include: { invitado: true },
-    });
-  }
+    async getNumInvitados(id: number) {
+        const user = await this.prisma.users.findUnique({
+            where: { id },
+            select: { num_invitados: true }
+        })
 
-  async getUserById(id: number) {
-    return await this.prisma.user.findUnique({
-      where: { id },
-      include: { invitado: true },
-    });
-  }
+        if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado`)
 
-  async createUser(name: string, phone: string) {
-    return this.prisma.user.create({
-      data: { nombre: name, telefono: phone, num_invitados: 0 },
-    });
-  }
+        return user.num_invitados ?? 0
+    }
 
-  async updateUser(id: number, name?: string, phone?: string) {
-    return await this.prisma.user.update({
-      where: { id },
-      data: { nombre: name, telefono: phone },
-    });
-  }
+    async getAcompanantes(id: number) {
+        const user = await this.prisma.users.findUnique({
+            where: { id },
+            select: { invitado: true }
+        })
 
-  async deleteUser(id: number) {
-    return await this.prisma.user.delete({
-      where: { id },
-    });
-  }
+        if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado`)
 
-  async inviteGuest(userId: number, name: string) {
-    const newGuest = await this.prisma.invitado.create({
-      data: { nombre: name, user_Id: userId },
-    });
+        return user.invitado.length
+    }
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { num_invitados: { increment: 1 } },
-    });
+    async getUsers() {
+        return this.prisma.users.findMany({
+            include: { invitado: true }
+        })
+    }
 
-    return newGuest;
-  }
+    async getUserById(id: number) {
+        const user = await this.prisma.users.findUnique({
+            where: { id },
+            include: { invitado: true }
+        });
 
-  async getGuests() {
-    return await this.prisma.invitado.findMany({
-      include: { invitado: true },
-    });
-  }
+        if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado`)
 
-  async getGuestById(id: number) {
-    return await this.prisma.invitado.findUnique({
-      where: { id },
-    });
-  }
+        return user
+    }
 
-  async deleteGuest(id: number) {
-    const guest = await this.prisma.invitado.delete({
-      where: { id },
-    });
+    async getUserByName(nombre: string) {
+        const user = await this.prisma.users.findMany({
+            where: {
+                nombre: { contains: nombre } //Muestra todos los registros que contengan parcial o completamente el nombre
+            },
+            include: { invitado: true }
+        })
 
-    await this.prisma.user.update({
-      where: { id: guest.user_Id },
-      data: { num_invitados: { decrement: 1 } },
-    });
+        if (!user) throw new NotFoundException(`Usuario con nombre ${nombre} no encontrado`)
+        return user
+    }
 
-    return guest;
-  }
+    async createUsuario(data: Users) {
+        return this.prisma.users.create({
+            data: {
+                nombre: data.nombre,
+                telefono: data.telefono,
+                num_invitados: data.num_invitados ?? 0
+            }
+        })
+    }
+
+    async updateUser(id: number, data: Users) {
+        await this.getUserById(id) // Verificar existencia antes de actualizar
+        return this.prisma.users.update({
+            where: {id},
+            data
+        })
+    }
+
+    async deleteUser(id: number) {
+        await this.getUserById(id) // Verificar existencia antes de eliminar
+        return this.prisma.users.delete({ where: { id } })
+    }
+
+    async addInvitado(user_id: number, data: Invitados) {
+        const haInvitado = await this.getAcompanantes(user_id)
+        const maxInvitados = await this.getNumInvitados(user_id)
+
+        if (haInvitado >= maxInvitados -1) {
+            throw new BadRequestException(`El usuario ha alcanzado el límite de invitados`);
+        } else {
+            return this.prisma.invitados.create({
+                data: { nombre: data.nombre, user_id }
+            })
+        }
+    }
+
+    async updateInvitado(id: number, data: Invitados, invite: number) {
+        await this.getUserById(id)
+        return this.prisma.invitados.update({ where: { id: invite }, data })
+    }
+
+    async deleteInvitado(id: number, invite: number) {
+        await this.getUserById(id)
+        return this.prisma.invitados.delete({ 
+            where: { id: invite }
+        })
+    }
+
+    async getInvitationsByUserId(user_id: number) {
+        return this.prisma.invitados.findMany({ where: { user_id } })
+    }
+
+    // Verificar número de teléfono del invitado principal
+    async verificarTelefono(id: number, telefono: string) {
+        const user = await this.prisma.users.findFirst({
+          where: { id, telefono },
+        });
+      
+        if (!user) throw new NotFoundException(`No se encontró un usuario con ID ${id} y el número ${telefono}`);
+      
+        // Actualizar el campo `verificado` a `true`
+        const updatedUser = await this.prisma.users.update({
+          where: { id: user.id },
+          data: { verificado: true },
+        });
+      
+        return { message: 'Número de teléfono válido', user: updatedUser };
+      }
+      
+    
 }

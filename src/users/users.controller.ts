@@ -1,26 +1,78 @@
-import { Controller, Post, Body, Param, Get } from '@nestjs/common';
-import { UserService } from './users.service';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Invitados, Users } from '@prisma/client';
+import { UsersService } from './users.service';
 
+@Controller('/users')
+export class UsersController {
+    constructor(private usersService: UsersService) { }
 
-@Controller('users')
-export class UserController {
-  constructor(private userService: UserService) {}
+    // Obtener todos los usuarios
+    @Get('/')
+    async getUsers() {
+        return await this.usersService.getUsers();
+    }
 
-  @Get('/')
-  async getUsers(){
-    return await this.userService.getUsers();
-  }
+    // Obtener usuario por id
+    @Get('/:id')
+    async getUserById(@Param('id') id: number) {
+        return await this.usersService.getUserById(Number(id));
+    }
 
-  @Post('create')
-  createUser(@Body('nombre') nombre: string, @Body('telefono') telefono: string) {
-    return this.userService.createUser(nombre, telefono);
-  }
+    // Obtener usuario por nombre
+    @Get('/nombre/:nombre')
+    async getUserByName(@Param('nombre') nombre: string) {
+        return await this.usersService.getUserByName(nombre);
+    }
 
-  @Post(':id/invite')
-  inviteGuest(
+    // Crear usuario
+    @Post('/createUser')
+    async createUsuario(@Body() data: Users) {
+        return await this.usersService.createUsuario(data);
+    }
+
+    // Actualizar usuario
+    @Patch('/:id/updateUser/:invite')
+    async updateUser(@Param('id') id: number, @Body() data: Users) {
+        return await this.usersService.updateUser(Number(id), data);
+    }
+
+    // Eliminar usuario
+    @Delete('/:id/deleteUser')
+    async deleteUser(@Param('id') id: number) {
+        return await this.usersService.deleteUser(Number(id));
+    }
+
+    // Añadir un invitado
+    @Post('/:user_id/addInvitado')
+    async addInvitado(@Param('user_id') user_id: number, @Body() data: Invitados) {
+        return await this.usersService.addInvitado(Number(user_id), data);
+    }
+
+    // Actualizar invitado
+    @Patch('/:id/updateInvitado/:invite')
+    async updateInvitado(@Param('id') id: number, @Body() data: Invitados, @Param('invite') invite: number) {
+        return await this.usersService.updateInvitado(Number(id), data, Number(invite));
+    }
+
+    // Eliminar invitado
+    @Delete('/:id/deleteInvitado/:invite')
+    async deleteInvitado(@Param('id') id: number, @Param('invite') invite: number){
+        return await this.usersService.deleteInvitado(Number(id), Number(invite));
+    }
+
+    // Obtener los invitados de un usuario
+    @Get('/:user_id/invitados')
+    async getInvitationsByUserId(@Param('user_id') user_id: number) {
+        return await this.usersService.getInvitationsByUserId(Number(user_id));
+    }
+
+    // Verificar numero telefomico 
+    @Post('/:id/verificarTelefono')
+  async verificarTelefono(
     @Param('id') id: number,
-    @Body('nombre') nombre: string,
+    @Body('telefono') telefono: string
   ) {
-    return this.userService.inviteGuest(Number(id), nombre);
+    return await this.usersService.verificarTelefono(Number(id), telefono);
   }
 }
+
